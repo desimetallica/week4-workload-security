@@ -1,0 +1,66 @@
+---
+- name: Hardening Host Machines
+  hosts: all
+  remote_user: "{{ ansible_user | default('ec2-user') }}"
+  become: true
+  become_method: sudo
+  become_user: root
+  connection: ssh
+
+  vars_files:
+    - vault.yaml
+  
+  tasks:
+    - block:
+      - name: Install httpd package
+        yum:
+          name: httpd
+          state: present
+      - name: Enable and start httpd service
+        service:
+          name: httpd
+          state: started
+          enabled: yes
+      - name: Ensure httpd ErrorLog file has correct permissions
+        file:
+          path: /var/log/httpd/error_log
+          owner: root
+          group: root
+          mode: '0644'
+      - name: Ensure httpd AccessLog file has correct permissions
+        file:
+          path: /var/log/httpd/access_log
+          owner: root
+          group: root
+          mode: '0644'
+      when: ansible_facts['os_family'] == 'RedHat'
+    
+    - block:
+      - name: install apache2 package
+        apt:
+          name: apache2
+          state: present
+      - name: Enable and start apache2 service
+        service:
+          name: apache2
+          state: started
+          enabled: yes
+      - name: Ensure apache2 ErrorLog file has correct permissions
+        file:
+          path: /var/log/apache2/error.log
+          owner: root
+          group: adm
+          mode: '0640'
+      - name: Ensure apache2 AccessLog file has correct permissions
+        file:
+          path: /var/log/apache2/access.log
+          owner: root
+          group: adm
+          mode: '0640'
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Load a sample index.html page
+      copy:
+        src: ../config/index.html 
+        dest: /var/www/html/index.html
+      when: ansible_facts['os_family'] == 'RedHat' or ansible_facts['os_family'] == 'Debian'  

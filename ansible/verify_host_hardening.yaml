@@ -1,0 +1,166 @@
+---
+- name: Verify Host Hardening
+  hosts: all
+  remote_user: "{{ ansible_user | default('ec2-user') }}"
+  become: true
+  become_method: sudo
+  become_user: root
+  connection: ssh
+
+  tasks:
+    - name: Check ec2-user password is set (Amazon Linux)
+      command: sudo -l -U ec2-user
+      register: ec2_user_sudo
+      changed_when: false
+      when: ansible_facts['distribution'] == 'Amazon'
+
+    - name: Check root password is set
+      command: sudo -l -U root
+      register: root_sudo
+      changed_when: false
+
+    - name: Check sysadmin user exists
+      getent:
+        database: passwd
+        key: sysadmin
+      register: sysadmin_user
+      changed_when: false
+
+    - name: Check sysadmin is in correct group
+      command: id sysadmin
+      register: sysadmin_id
+      changed_when: false
+
+    - name: Check firewalld is installed and running (RedHat)
+      service:
+        name: firewalld
+        state: started
+      register: firewalld_status
+      changed_when: false
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Check firewalld default zone target is DROP (RedHat)
+      command: firewall-cmd --get-default-zone
+      register: firewalld_zone
+      changed_when: false
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Check SSH port is open in firewalld (RedHat)
+      command: firewall-cmd --zone=public --list-services
+      register: firewalld_services
+      changed_when: false
+      when: ansible_facts['os_family'] == 'RedHat'
+
+    - name: Check UFW is installed and running (Debian)
+      service:
+        name: ufw
+        state: started
+      register: ufw_status
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Check UFW default policies (Debian)
+      command: ufw status verbose
+      register: ufw_policies
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Check SSH allowed in UFW (Debian)
+      command: ufw status
+      register: ufw_ssh
+      changed_when: false
+      when: ansible_facts['os_family'] == 'Debian'
+
+    - name: Check root SSH login is disabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PermitRootLogin'
+        line: 'PermitRootLogin no'
+        state: present
+      check_mode: yes
+      register: root_ssh_disabled
+      changed_when: false
+
+    - name: Check password authentication for SSH is disabled
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^PasswordAuthentication'
+        line: 'PasswordAuthentication no'
+        state: present
+      check_mode: yes
+      register: password_auth_disabled
+      changed_when: false
+
+    - name: Check Fail2Ban is installed and running
+      service:
+        name: fail2ban
+        state: started
+      register: fail2ban_status
+      changed_when: false
+      when: ansible_facts['os_family'] in ['RedHat', 'Debian']
+
+    - name: Check Fail2Ban bantime
+      command: grep '^bantime = 3600' /etc/fail2ban/jail.local
+      register: fail2ban_bantime
+      changed_when: false
+      when: ansible_facts['os_family'] in ['RedHat', 'Debian']
+
+    - name: Check Fail2Ban maxretry
+      command: grep '^maxretry = 5' /etc/fail2ban/jail.local
+      register: fail2ban_maxretry
+      changed_when: false
+      when: ansible_facts['os_family'] in ['RedHat', 'Debian']
+
+    - name: Check Fail2Ban findtime
+      command: grep '^findtime = 600' /etc/fail2ban/jail.local
+      register: fail2ban_findtime
+      changed_when: false
+      when: ansible_facts['os_family'] in ['RedHat', 'Debian']
+
+    - name: Check sysconf_backup.sh exists in /root/
+      stat:
+        path: /root/sysconf_backup.sh
+      register: sysconf_backup_script
+      changed_when: false
+
+    - name: Check for backup tar.gz file in /root/
+      find:
+        paths: /root/
+        patterns: '*.tar.gz'
+        file_type: file
+      register: sysconf_backup_file
+      changed_when: false
+
+    - name: Check ec2-user sudoers file (Amazon Linux)
+      lineinfile:
+        path: /etc/sudoers.d/90-cloud-init-users
+        regexp: '^ec2-user ALL=' 
+        line: 'ec2-user ALL=(ALL) ALL'
+        state: present
+      check_mode: yes
+      register: ec2_user_sudoers
+      changed_when: false
+      when: ansible_facts['distribution'] == 'Amazon'
+
+    - name: Show verification results
+      debug:
+        msg:
+          - "ec2-user sudo: {{ ec2_user_sudo }}"
+          - "root sudo: {{ root_sudo }}"
+          - "sysadmin user: {{ sysadmin_user }}"
+          - "sysadmin id: {{ sysadmin_id }}"
+          - "firewalld status: {{ firewalld_status }}"
+          - "firewalld zone: {{ firewalld_zone }}"
+          - "firewalld services: {{ firewalld_services }}"
+          - "ufw status: {{ ufw_status }}"
+          - "ufw policies: {{ ufw_policies }}"
+          - "ufw ssh: {{ ufw_ssh }}"
+          - "root SSH disabled: {{ root_ssh_disabled }}"
+          - "password auth disabled: {{ password_auth_disabled }}"
+          - "fail2ban status: {{ fail2ban_status }}"
+          - "fail2ban bantime: {{ fail2ban_bantime }}"
+          - "fail2ban maxretry: {{ fail2ban_maxretry }}"
+          - "fail2ban findtime: {{ fail2ban_findtime }}"
+          - "sysconf_backup.sh: {{ sysconf_backup_script }}"
+          - "sysconf_backup file: {{ sysconf_backup_file }}"
+          - "ec2-user sudoers: {{ ec2_user_sudoers }}"
