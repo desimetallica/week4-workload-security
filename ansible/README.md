@@ -6,6 +6,7 @@ This folder contains an Ansible playbook for hardening your hosts.
 ## Playbooks
 
 - `host_hardening.yml`: Main playbook to apply security hardening to hosts.
+- `workload_config.yml`: Config playbook to include a simple running workload. 
 - `verify_host_hardening.yml`: Playbook to verify that all hardening steps have been correctly applied.
 
 ## Usage Instructions
@@ -14,7 +15,7 @@ This folder contains an Ansible playbook for hardening your hosts.
    - Edit the `hosts` file to list the target machines you want to harden.
    - Prepare Vault file with command:
    `ansible-vault edit vault.yaml`
-   with the following variables:
+   with the following example variables:
 
 ```
   sysadmin_password: "12345"
