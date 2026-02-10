@@ -1,3 +1,5 @@
+# Python virtual environment
+.venv/
 # Local .terraform directories
 .terraform/
 

@@ -12,6 +12,7 @@ an attacker could move an check permissions and capabilies on AWS cloud.
 - AWS Free Tier account
 - Terraform
 - Ansible
+- Simple recon script
 - Amazon Linux 2/2023 or Ubuntu/Debian EC2 instances
 
 Resources in our lab:
@@ -53,7 +54,8 @@ Resources in our lab:
 - `ansible/sysconf_backup.sh`: Bash script for config backup
 - `ansible/verify_host_hardening.yml`: Configuration check
 
-
+## Recon Script 
+- `config/recon.py`
 
 ## Lessons Learned
 
