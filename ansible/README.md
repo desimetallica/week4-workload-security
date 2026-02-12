@@ -32,12 +32,17 @@ This folder contains an Ansible playbook for hardening your hosts.
      
      ```sh
      ansible-playbook -i hosts host_hardening.yml -v --ask-vault-pass --ask-become-pass
+     ansible-playbook -i hosts workload_config.yml -v --ask-vault-pass --ask-become-pass
      ```
+
+
    - `-i hosts` specifies the inventory file.
    - `host_hardening.yml` is the playbook file.
    - `-v` enables verbose output.
    - `--ask-vault-pass` prompts for the vault password if encrypted variables are used. 
    - `--ask-become-pass` prompts for the sudo password if privilege escalation is required (vault var: ec2_user_password).
+
+
 
 
 4. **Verify the hardening:**

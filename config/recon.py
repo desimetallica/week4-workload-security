@@ -1,3 +1,4 @@
+
 import boto3
 from botocore.exceptions import ClientError
 import sys
@@ -9,6 +10,81 @@ REGION = "eu-south-1"  # change if needed
 def session():
     return boto3.Session(profile_name=PROFILE, region_name=REGION)
 
+def vpc_layer_scan(sess):
+    print("[*] VPC Environment Layer Scan")
+    ec2 = sess.client("ec2")
+    try:
+        # Describe VPCs
+        vpcs = ec2.describe_vpcs()["Vpcs"]
+        print(f"    [+] VPCs: {len(vpcs)} found")
+        for vpc in vpcs:
+            print(f"        - VPC ID: {vpc.get('VpcId')}, CIDR: {vpc.get('CidrBlock')}, State: {vpc.get('State')}, IsDefault: {vpc.get('IsDefault')}")
+
+        # Describe Subnets
+        subnets = ec2.describe_subnets()["Subnets"]
+        print(f"    [+] Subnets: {len(subnets)} found")
+        for subnet in subnets:
+            print(f"        - Subnet ID: {subnet.get('SubnetId')}, VPC: {subnet.get('VpcId')}, CIDR: {subnet.get('CidrBlock')}, AZ: {subnet.get('AvailabilityZone')}")
+
+        # Describe Route Tables
+        rts = ec2.describe_route_tables()["RouteTables"]
+        print(f"    [+] Route Tables: {len(rts)} found")
+        for rt in rts:
+            print(f"        - Route Table ID: {rt.get('RouteTableId')}, VPC: {rt.get('VpcId')}")
+            for route in rt.get('Routes', []):
+                print(f"            Route: {route.get('DestinationCidrBlock', route.get('DestinationPrefixListId', ''))} -> {route.get('GatewayId', route.get('NatGatewayId', route.get('InstanceId', '')))}")
+
+        # Describe Internet Gateways
+        igws = ec2.describe_internet_gateways()["InternetGateways"]
+        print(f"    [+] Internet Gateways: {len(igws)} found")
+        for igw in igws:
+            print(f"        - IGW ID: {igw.get('InternetGatewayId')}, Attachments: {igw.get('Attachments')}")
+
+        # Describe NAT Gateways
+        try:
+            natgws = ec2.describe_nat_gateways()["NatGateways"]
+            print(f"    [+] NAT Gateways: {len(natgws)} found")
+            for nat in natgws:
+                print(f"        - NAT GW ID: {nat.get('NatGatewayId')}, State: {nat.get('State')}, VPC: {nat.get('VpcId')}, Subnet: {nat.get('SubnetId')}")
+        except Exception as e:
+            print(f"    [!] Could not describe NAT Gateways: {e}")
+
+        # Describe Security Groups
+        sgs = ec2.describe_security_groups()["SecurityGroups"]
+        print(f"    [+] Security Groups: {len(sgs)} found")
+        for sg in sgs:
+            print(f"        - SG ID: {sg.get('GroupId')}, Name: {sg.get('GroupName')}, VPC: {sg.get('VpcId')}")
+
+        # Describe Instances
+        reservations = ec2.describe_instances()["Reservations"]
+        instances = [i for r in reservations for i in r["Instances"]]
+        print(f"    [+] EC2 Instances: {len(instances)} found")
+        for inst in instances:
+            print(f"        - Instance ID: {inst.get('InstanceId')}, State: {inst.get('State', {}).get('Name')}, VPC: {inst.get('VpcId')}, Subnet: {inst.get('SubnetId')}, Type: {inst.get('InstanceType')}")
+
+        # Describe Network Interfaces
+        nis = ec2.describe_network_interfaces()["NetworkInterfaces"]
+        print(f"    [+] Network Interfaces: {len(nis)} found")
+        for ni in nis:
+            print(f"        - ENI ID: {ni.get('NetworkInterfaceId')}, VPC: {ni.get('VpcId')}, Subnet: {ni.get('SubnetId')}, Status: {ni.get('Status')}, Private IP: {ni.get('PrivateIpAddress')}")
+
+        # Describe VPC Peering Connections
+        peerings = ec2.describe_vpc_peering_connections()["VpcPeeringConnections"]
+        print(f"    [+] VPC Peering Connections: {len(peerings)} found")
+        for pc in peerings:
+            print(f"        - Peering ID: {pc.get('VpcPeeringConnectionId')}, Status: {pc.get('Status', {}).get('Code')}, Requester VPC: {pc.get('RequesterVpcInfo', {}).get('VpcId')}, Accepter VPC: {pc.get('AccepterVpcInfo', {}).get('VpcId')}")
+
+        # Describe Transit Gateways
+        try:
+            tgs = ec2.describe_transit_gateways()["TransitGateways"]
+            print(f"    [+] Transit Gateways: {len(tgs)} found")
+            for tg in tgs:
+                print(f"        - TGW ID: {tg.get('TransitGatewayId')}, State: {tg.get('State')}, Owner: {tg.get('OwnerId')}")
+        except Exception as e:
+            print(f"    [!] Could not describe Transit Gateways: {e}")
+
+    except ClientError as e:
+        print(f"[!] VPC Layer Scan error: {e.response['Error']['Code']}")
 
 def ec2_recon(sess):
     print("[*] EC2 reconnaissance")
@@ -59,7 +135,6 @@ def ec2_recon(sess):
                 print(f"            [{rule_type}] Rule #{entry.get('RuleNumber')}: {action}, Protocol: {proto}, Ports: {from_port}-{to_port}, CIDR: {cidr}")
     except ClientError as e:
         print(f"[!] EC2 error: {e.response['Error']['Code']}")
-
 
 def s3_recon(sess):
     print("[*] S3 reconnaissance")
@@ -122,7 +197,6 @@ def s3_recon(sess):
     except ClientError as e:
         print(f"[!] S3 error: {e.response['Error']['Code']}")
 
-
 def dynamodb_recon(sess):
     print("[*] DynamoDB reconnaissance")
     ddb = sess.client("dynamodb")
@@ -142,7 +216,6 @@ def dynamodb_recon(sess):
 
     except ClientError as e:
         print(f"[!] DynamoDB error: {e.response['Error']['Code']}")
-
 
 def lambda_recon(sess):
     print("[*] Lambda reconnaissance")
@@ -175,6 +248,8 @@ def main():
     print(f"[*] Starting AWS recon using profile '{PROFILE}'")
     sess = session()
 
+
+    vpc_layer_scan(sess)
     ec2_recon(sess)
     s3_recon(sess)
     dynamodb_recon(sess)
