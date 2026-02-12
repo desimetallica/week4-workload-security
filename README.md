@@ -90,11 +90,10 @@ mkdir ./cloudtrail-logs
 aws s3 sync s3://YOUR_AWS_RESOURCE_NAME/AWSLogs/
 ```
 
-
-
 To detect this behavior, CloudTrail log hunting focuses on identifying enumeration patterns, cross-service sweeps, and burst activity within short time windows. Using `jq`, it is possible to filter CloudTrail records for a specific principal and isolate `Get|List|Describe` events, correlating them by timestamp and service. This enables detection of automated reconnaissance, especially when combined with user agent analysis (e.g., `aws-cli`, `boto3`, `botocore`) and minute-level aggregation to highlight high-density API activity.
 
 In the simulated scenario, the `recon.py` script generates a concentrated scan across services (S3, EC2, Lambda, DynamoDB) within seconds, clearly visible in CloudTrail as a burst of enumeration calls. By grouping events per identity and time slice, and counting service diversity, it becomes possible to distinguish normal operational activity from scripted reconnaissance. This approach demonstrates practical detection engineering capabilities: correlating identity, API pattern, service spread, automation fingerprinting, and temporal density to identify cloud-native reconnaissance behavior.
+
 
 
 ### Priviledge Escalation phase
