@@ -92,11 +92,97 @@ aws s3 sync s3://YOUR_AWS_RESOURCE_NAME/AWSLogs/
 
 To detect this behavior, CloudTrail log hunting focuses on identifying enumeration patterns, cross-service sweeps, and burst activity within short time windows. Using `jq`, it is possible to filter CloudTrail records for a specific principal and isolate `Get|List|Describe` events, correlating them by timestamp and service. This enables detection of automated reconnaissance, especially when combined with user agent analysis (e.g., `aws-cli`, `boto3`, `botocore`) and minute-level aggregation to highlight high-density API activity.
 
+``` bash
+jq -r '                       
+  .Records[] |
+  select(
+    (.userIdentity.userName? == "bob") and
+    (.eventName? and (.eventName | test("^(Get|List|Describe)")))
+  ) |
+  [.eventTime, .eventSource, .eventName] |
+  @tsv
+' *.json
+
+2026-02-11T15:21:57Z	ec2.amazonaws.com	DescribeSecurityGroups
+2026-02-11T15:21:57Z	ec2.amazonaws.com	DescribeNetworkAcls
+2026-02-11T15:21:56Z	ec2.amazonaws.com	DescribeVpcs
+2026-02-11T15:22:02Z	s3.amazonaws.com	ListBuckets
+2026-02-11T15:22:10Z	s3.amazonaws.com	GetBucketAcl
+2026-02-11T15:22:12Z	s3.amazonaws.com	GetBucketEncryption
+2026-02-11T15:22:11Z	s3.amazonaws.com	GetBucketPolicy
+2026-02-11T15:22:13Z	s3.amazonaws.com	GetBucketPublicAccessBlock
+2026-02-11T15:22:21Z	s3.amazonaws.com	GetBucketAcl
+2026-02-11T15:22:21Z	s3.amazonaws.com	GetBucketPolicy
+2026-02-11T15:22:21Z	s3.amazonaws.com	GetBucketEncryption
+2026-02-11T15:22:21Z	s3.amazonaws.com	GetBucketPublicAccessBlock
+2026-02-11T15:22:32Z	lambda.amazonaws.com	ListFunctions20150331
+2026-02-11T15:22:24Z	dynamodb.amazonaws.com	ListTables
+```
+With this command you can evaluate also the time correlation between each event, and check if probably is tool automated or not.
+A refinement to improve the highlighting on time and scan correlation is the following jq filter. This visualization is to filter per minutes (`.eventTime[0:16]`), group per minutes and sort it. 
+
+``` bash
+jq -r '
+  .Records[] |
+  select(
+    (.eventName? // "" | test("^(Get|List|Describe)")) and
+    (.userAgent? // "" | test("aws-cli|boto|botocore|Boto3"))
+  ) |
+  [
+    (.eventTime[0:16]),   # YYYY-MM-DDTHH:MM
+    .userIdentity.arn
+  ] |
+  @tsv
+' *.json | sort | uniq -c | sort -nr
+
+     24 2026-02-11T17:00	arn:aws:iam::137809406849:user/bob
+     11 2026-02-11T15:22	arn:aws:iam::137809406849:user/bob
+      3 2026-02-11T15:21	arn:aws:iam::137809406849:user/bob
+      1 2026-02-11T15:47	arn:aws:iam::137809406849:user/bob
+
+```
+
+It is important to correlate during the scan the `AccessDenied` error:
+
+``` bash
+jq -r '
+  .Records[] |
+  select(
+    (.eventName? // "" | test("^(Get|List|Describe)")) and
+    (.userAgent? // "" | test("aws-cli|boto|botocore|Boto3")) and
+    (.errorCode? == "AccessDenied")
+  ) |
+  [.eventTime, .userIdentity.arn, .eventName] |
+  @tsv
+' *.json
+2026-02-11T15:22:32Z	arn:aws:iam::137809406849:user/bob	ListFunctions20150331
+2026-02-11T15:22:24Z	arn:aws:iam::137809406849:user/bob	ListTables
+2026-02-11T15:47:11Z	arn:aws:iam::137809406849:user/bob	ListFunctions20150331
+2026-02-11T17:00:51Z	arn:aws:iam::137809406849:user/bob	ListTables
+2026-02-11T17:00:51Z	arn:aws:iam::137809406849:user/bob	ListFunctions20150331
+```
+
 In the simulated scenario, the `recon.py` script generates a concentrated scan across services (S3, EC2, Lambda, DynamoDB) within seconds, clearly visible in CloudTrail as a burst of enumeration calls. By grouping events per identity and time slice, and counting service diversity, it becomes possible to distinguish normal operational activity from scripted reconnaissance. This approach demonstrates practical detection engineering capabilities: correlating identity, API pattern, service spread, automation fingerprinting, and temporal density to identify cloud-native reconnaissance behavior.
 
+### Pacu Usage
 
+Another way to simulate offensive security actions against AWS cloud is to use Pacu.  Pacu allows penetration testers to exploit configuration flaws within an AWS account, using modules to easily expand its functionality.
+
+1. run with default entrypoint
+``` bash
+docker run -it rhinosecuritylabs/pacu:latest
+```
+2. insert aws_access_key_id and aws_secret_access_key with `set_keys` command
+
+3. generate some recon trafic with simple modules:
+``` bash
+run ec2__enum --regions eu-south-1        #enum vpc information
+run lambda__enum --regions eu-south-1     #enum lambda 
+```
 
 ### Priviledge Escalation phase
+
+
 
 
 ## Lessons Learned
